@@ -1,45 +1,293 @@
 #Library Loading ----
 
-library(tidyverse)
-#library(anytime)
-#library(plyr)
-#library(dplyr)
-#library(readr)
-library(lubridate)
-#library(geosphere)
-library(rgdal)
-library(raster)
-library(sp)
+require(tidyverse)
+require(lubridate)
+require(rgdal)
+require(raster)
+require(sp)
+require(rgeos)
+
 #to remove all variables when needed
 #rm(list=ls())
-library(rgeos)
 
 source("loadData.R")
 
-#Testing Code ---- 
-testFile <- loadData("gps", "gps/pre")
-testFile <- testFile[[1]]
+#Testing Loading Code ---- 
+shapeList <- loadShapeFiles("raw/bounds")
 
-testGPS <- testFile[c('Longitude', "Latitude")]
+dataIn <- loadData("gps", "gps/pre")
+sharedCRS <- proj4string(shapeList[[1]])
+
+gpsCoords <- loadGPSCoords(dataIn, sharedCRS)
+
+movementCalendar <- loadMovement()
+
+test <- extractZeroGPS(dataList)
+
+#Testing Code ----
+rawData <- dataIn
+coords <- gpsCoords
+shapes <- shapeList
+
+test1 <- extractOutBounds(dataIn)
+
+filterOutBounds <- function(dataIn)
+{
+  shapes <- loadShapeFiles("raw/bounds")
+  sharedCRS <- proj4string(shapeList[[1]])
+  
+  coords <- loadGPSCoords(dataIn, sharedCRS)
+  
+  dataList <- list()
+  
+  for(j in 1:nrow(movementCalendar))
+  {
+    copyCalendar <- movementCalendar[j, ]
+    
+    CollarID <- copyCalendar$Collar
+    BullID <- copyCalendar$Bull
+    pen <- copyCalendar$arcGISShapeFileName
+    
+    prefix <- "ID"
+    varname <- paste(prefix, CollarID, sep="_")
+    
+    copyFrame <- dataIn[[varname]]
+    copyCoords <- coords[[varname]]
+    copyShape <- shapes[[pen]]
+    
+    if(is.null(copyFrame))
+    {}
+    else if(nrow(copyFrame) > 0)
+    {
+      #Will have to add when made into a full function
+      #copyFrame <- copyFrame[copyFrame$BullID == BullID, ] 
+      
+      copyFrame <- copyFrame[copyCalendar$StartDate <= as.Date(copyFrame$DateTime) & copyCalendar$EndDate >= as.Date(copyFrame$DateTime), ]
+
+      if(is.null(copyFrame))
+      {}
+      else if(nrow(copyFrame) > 0)
+      {
+        analyzedCoordinates <- over(copyCoords, copyShape)
+        
+        inBounds <- analyzedCoordinates[!is.na(analyzedCoordinates$Shape_Leng) | !is.na(analyzedCoordinates$Shape_Area),]
+        
+        index <- rownames(inBounds)
+        
+        outputFrame <- copyFrame[rownames(copyFrame) %in% index,]
+        
+        logNames <- names(dataList) == varname
+        listSum <- sum(logNames)
+        
+        if(listSum > 0)
+        {
+          dataList[[varname]] <- rbind(dataList[[varname]], outputFrame)
+        }
+        else
+        {
+          dataList[[varname]] <- outputFrame
+        } 
+      
+      }
+    }
+  }
+  
+  return(dataList)
+}
 
 
-directoryPath <- paste("raw/", "bounds/shapefiles/pen1", "/", sep="")
-fileList <- list.files(directoryPath)
-filePath <- paste(directoryPath, fileList[6], sep="")
+extractOutBounds <- function(dataIn)
+{
+  shapes <- loadShapeFiles("raw/bounds")
+  sharedCRS <- proj4string(shapeList[[1]])
+  
+  coords <- loadGPSCoords(dataIn, sharedCRS)
+  
+  dataList <- list()
+  
+  for(j in 1:nrow(movementCalendar))
+  {
+    copyCalendar <- movementCalendar[j, ]
+    
+    CollarID <- copyCalendar$Collar
+    BullID <- copyCalendar$Bull
+    pen <- copyCalendar$arcGISShapeFileName
+    
+    prefix <- "ID"
+    varname <- paste(prefix, CollarID, sep="_")
+    
+    copyFrame <- dataIn[[varname]]
+    copyCoords <- coords[[varname]]
+    copyShape <- shapes[[pen]]
+    
+    if(is.null(copyFrame))
+    {}
+    else if(nrow(copyFrame) > 0)
+    {
+      #Will have to add when made into a full function
+      #copyFrame <- copyFrame[copyFrame$BullID == BullID, ] 
+      
+      copyFrame <- copyFrame[copyCalendar$StartDate <= as.Date(copyFrame$DateTime) & copyCalendar$EndDate >= as.Date(copyFrame$DateTime), ]
+      
+      if(is.null(copyFrame))
+      {}
+      else if(nrow(copyFrame) > 0)
+      {
+        analyzedCoordinates <- over(copyCoords, copyShape)
+        
+        inBounds <- analyzedCoordinates[is.na(analyzedCoordinates$Shape_Leng) | is.na(analyzedCoordinates$Shape_Area),]
+        
+        index <- rownames(inBounds)
+        
+        outputFrame <- copyFrame[rownames(copyFrame) %in% index,]
+        
+        logNames <- names(dataList) == varname
+        listSum <- sum(logNames)
+        
+        if(listSum > 0)
+        {
+          dataList[[varname]] <- rbind(dataList[[varname]], outputFrame)
+        }
+        else
+        {
+          dataList[[varname]] <- outputFrame
+        } 
+        
+      }
+    }
+  }
+  
+  return(dataList)
+}
 
-pen1 <- shapefile(filePath)
+#Testing Working Code ---- 
 
-directoryPath <- paste("raw/", "bounds/shapefiles/pen2", "/", sep="")
-fileList <- list.files(directoryPath)
-filePath <- paste(directoryPath, fileList[6], sep="")
+#selection for points that are exsiting do equals NA if wanting number of out of bound points
+t <- over(testGPS, shape)
+test <- t[!is.na(t$Shape_Leng),]
+index <- rownames(test)
 
-pen2 <- shapefile(filePath)
+testFrame <- dataIn[[1]]
 
-irectoryPath <- paste("raw/", "bounds/shapefiles/pen3", "/", sep="")
-fileList <- list.files(directoryPath)
-filePath <- paste(directoryPath, fileList[6], sep="")
-
-pen3 <- shapefile(filePath)
+testCoords <- testFrame[rownames(testFrame) %in% index,]
 
 
-t <- over(pen1, testGPS)
+#Loading Movement Callendar ----
+loadMovement <- function()
+{
+  directoryPath <- paste("raw/", "events", "/", sep="")
+  fileList <- list.files(directoryPath)
+  filePath <- paste(directoryPath, fileList[2], sep="") 
+  
+  pens <- read.csv(filePath, stringsAsFactors = FALSE)
+  pens$EndDate[pens$EndDate == "END"] <- '20-Sep-20'
+  
+  pens$EndDate <- as.Date(pens$EndDate, format = '%d-%b-%y')
+  pens$StartDate <- as.Date(pens$StartDate, format = '%d-%b-%y')
+  
+  pens <- pens[pens$Collar != "N/A",] 
+  
+  return(pens)
+}
+
+
+#Loading Shape Functions ---- 
+loadShapeFiles <- function(path)
+{
+  directoryPath <- path
+  fileList <- list.files(directoryPath, pattern = "\\.shp$")
+  fileNames <- strsplit(fileList, "[.]")
+  
+  shapeList <- list()
+  
+  for(i in 1:length(fileNames))
+  {
+    name <- fileNames[[i]][1]
+    shapeList[[name]] <- readOGR(dsn = directoryPath, layer = name)
+  }
+  
+  return(shapeList)
+}
+
+
+#GPS Coordinate Change ----
+loadGPSCoords <- function(dataIn, sharedCRS)
+{
+  dataNames <- names(dataIn)
+  gpsCoordiantes <- list()
+  
+  for(i in 1:length(dataIn))
+  {
+    name <- dataNames[i]
+    copyFrame <- dataIn[[name]]
+    
+    copyFrame <- copyFrame[c('Longitude', "Latitude")]
+    coordinates(copyFrame) <- cbind(copyFrame$Longitude, copyFrame$Latitude)
+    
+    proj4string(copyFrame) <- sharedCRS
+    
+    gpsCoordiantes[[name]] <- copyFrame
+  }
+  
+  return(gpsCoordiantes)
+}
+
+
+#GPS Zero Extraction & Filtering
+extractZeroGPS <- function(dataIn) 
+{
+  dataList <- list()
+  
+  for(i in 1:length(dataIn))
+  {
+    copyFrame <- dataIn[[i]]
+    
+    fileID <- levels(copyFrame$CollarID[1])
+    prefix <- "ID"
+    varname <- paste(prefix, fileID, sep="_")
+    
+    copyFrame <- copyFrame[copyFrame$Latitude == 0 | copyFrame$Longitude == 0 | copyFrame$Altitude == 0,]
+    
+    logNames <- names(dataList) == varname
+    listSum <- sum(logNames)
+    
+    if(listSum > 0)
+    {
+      dataList[[varname]] <- rbind(dataList[[varname]], copyFrame)
+    }
+    else
+    {
+      dataList[[varname]] <- copyFrame
+    }   
+  }
+  return(dataList)
+}
+
+filterZeroGPS <- function(dataIn) 
+{
+  dataList <- list()
+  
+  for(i in 1:length(dataIn))
+  {
+    copyFrame <- dataIn[[i]]
+    
+    fileID <- levels(copyFrame$CollarID[1])
+    prefix <- "ID"
+    varname <- paste(prefix, fileID, sep="_")
+    
+    copyFrame <- copyFrame[copyFrame$Latitude != 0 | copyFrame$Longitude != 0 | copyFrame$Altitude != 0,]
+    
+    logNames <- names(dataList) == varname
+    listSum <- sum(logNames)
+    
+    if(listSum > 0)
+    {
+      dataList[[varname]] <- rbind(dataList[[varname]], copyFrame)
+    }
+    else
+    {
+      dataList[[varname]] <- copyFrame
+    }   
+  }
+  return(dataList)
+}

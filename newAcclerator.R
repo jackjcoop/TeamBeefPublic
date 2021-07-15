@@ -17,66 +17,6 @@ require(rgeos)
 source("loadData.R")
 #rm(list=ls())
 
-
-#Order of Ops
-#Load Data /
-#Filter Calendar /
-#Extract and Filter Bounds / 
-#Extract and Filter Errernous Dates
-#Update Fixes 
-#Update Summarization 
-#Combine Data-Frames 
-#Plot Previous 
-#Update Plots 
-
-
-gpsRawPre <- loadData("gps", "gps/pre")
-gpsCalendarPre <- filterCalendar(gpsRawPre)
-
-gpsOutBoundsPre <- extractOutBounds(gpsCalendarPre)
-gpsZerosPre <- extractZeroGPS(gpsOutBoundsPre)
-gpsOutBoundsPre <- filterZeroGPS(gpsOutBoundsPre)
-
-gpsInBoundsPre <- filterOutBounds(gpsCalendarPre)
-gpsFilteredPre <- speedAndTimeDifference(gpsInBoundsPre)
-
-gpsBadDatesPre <- extractErrenousDates(gpsFilteredPre)
-gpsFilteredPre <- filterErrenousDates(gpsFilteredPre)
-
-gpsResultsPre <- gpsFixCheck(gpsFilteredPre)
-#gpsSummaryPre <- gpsSummaryRaw(gpsResultsPre, gpsBadDatesPre, gpsZerosPre, gpsOutBoundsPre)
-
-# -------------------------------------------------- #
-
-gpsRawPost <- loadData("gps", "gps/post")
-gpsCalendarPost <- filterCalendar(gpsRawPost)
-
-gpsOutBoundsPost <- extractOutBounds(gpsCalendarPost)
-gpsZerosPost <- extractZeroGPS(gpsOutBoundsPost)
-gpsOutBoundsPost <- filterZeroGPS(gpsOutBoundsPost)
-
-gpsInBoundsPost <- filterOutBounds(gpsCalendarPost)
-gpsFilteredPost <- speedAndTimeDifference(gpsInBoundsPost)
-
-gpsBadDatesPost <- extractErrenousDates(gpsFilteredPost)
-gpsFilteredPost <- filterErrenousDates(gpsFilteredPost)
-
-gpsResultsPost <- gpsFixCheck(gpsFilteredPost)
-#gpsSummaryPost <- gpsSummaryRaw(gpsResultsPost, gpsBadDatesPost, gpsZerosPost, gpsOutBoundsPost)
-
-# -------------------------------------------------- #
-
-gpsSummaryPre <- gpsSummaryRaw(gpsResultsPre, gpsBadDatesPre, gpsZerosPre, gpsOutBoundsPre)
-gpsSummaryPost <- gpsSummaryRaw(gpsResultsPost, gpsBadDatesPost, gpsZerosPost, gpsOutBoundsPost)
-
-gpsSummaryPost <- gpsSummaryPost[-c(3), ]
-gpsSummaryComb <- gpsSummaryCombine(gpsSummaryPre, gpsSummaryPost)
-
-write.csv(gpsSummaryPre, "F:/Development/Projects/Research/TeamBeef/workingProject/output/preGPS.csv", row.names = FALSE)
-write.csv(gpsSummaryPost, "F:/Development/Projects/Research/TeamBeef/workingProject/output/postGPS.csv", row.names = FALSE)
-write.csv(gpsSummaryComb, "F:/Development/Projects/Research/TeamBeef/workingProject/output/combGPS.csv", row.names = FALSE)
-
-
 #Testing Code ---- 
 
 
@@ -177,13 +117,13 @@ speedAndTimeDifference <- function(dataIn)
       #Speed
       # p1GPS <- p1 %>% select(Latitude, Longitude)
       # p2GPS <- p2 %>% select(Latitude, Longitude)
-  
+      
       p1GPS <- p1[c('Longitude', "Latitude")]
       p2GPS <- p2[c('Longitude', "Latitude")]
-  
+      
       distance <- distGeo(p1GPS, p2GPS)
       speed <- abs(distance / time)
-  
+      
       copyFrame <- cbind(copyFrame, Speed = speed)
       copyFrame$DateTime <- date(copyFrame$DateTime)
       
@@ -427,7 +367,7 @@ gpsFixCheck <- function(dataIn)
       expFix <- length(expectedFixes[as.Date(expectedFixes$dates) == dateSequence$dates[i], ] )
       
       date <- dateSequence$dates[i]
-
+      
       if(is.null(copyFrame))
       {
         fix <- 0 
@@ -569,7 +509,7 @@ gpsPie <- function(dataIn)
                                              axis.text.x=element_text(colour='black'),
                                              axis.title=element_blank())
       
-     # p <- p + scale_y_continuous(breaks=cumsum(data$values) - data$values / 2, labels= data$label)
+      # p <- p + scale_y_continuous(breaks=cumsum(data$values) - data$values / 2, labels= data$label)
       
       p <- p + ggtitle(title)
       
@@ -601,7 +541,7 @@ acclAnalysis <- function(dataIn)
     varname <- paste(prefix, CollarID, sep="_")
     
     copyFrame <- dataIn[[varname]]
-
+    
     for(i in 1:nrow(dateSequence))
     {
       dateFrame <- copyFrame[copyFrame$DateTime == dateSequence$dates[i], ]
@@ -739,7 +679,7 @@ gpsSummaryRaw <- function(results, badDates, zeros, out)
       
       BullID <- levels(copyFrame$BullID)
       BullID <- BullID[i]
-    
+      
       copyFrameDates <- badDates[[varname]]
       copyFrameDates <- copyFrameDates[copyFrameDates$BullID == BullID, ]
       
@@ -766,7 +706,7 @@ gpsSummaryRaw <- function(results, badDates, zeros, out)
         fix <- sum(copyFrameResults$fix)
         early <- sum(copyFrameResults$early) 
         late <- sum(copyFrameResults$late)
-       # missing <- sum(copyFrameResults$missing)
+        # missing <- sum(copyFrameResults$missing)
       }
       
       if(is.null(copyFrameDates)) 
@@ -806,16 +746,16 @@ gpsSummaryRaw <- function(results, badDates, zeros, out)
     }
     
   }
-  
-  sumFix <- (outputFrame$fix +  outputFrame$early + outputFrame$late + abs(outputFrame$missing) + outputFrame$errenousDates + outputFrame$noFix + outputFrame$outBounds)
-
-  outputFrame$fix <- outputFrame$fix / sumFix * 100
-  outputFrame$early <- outputFrame$early / sumFix * 100
-  outputFrame$late <- outputFrame$late / sumFix * 100
-  outputFrame$missing <- outputFrame$missing / sumFix * 100
-  outputFrame$errenousDates <- outputFrame$errenousDates / sumFix * 100
-  outputFrame$noFix <- outputFrame$noFix / sumFix * 100
-  outputFrame$outBounds <- outputFrame$outBounds / sumFix * 100
+  # 
+  # sumFix <- (outputFrame$fix +  outputFrame$early + outputFrame$late + abs(outputFrame$missing) + outputFrame$errenousDates + outputFrame$noFix + outputFrame$outBounds)
+  # 
+  # outputFrame$fix <- outputFrame$fix / sumFix * 100
+  # outputFrame$early <- outputFrame$early / sumFix * 100
+  # outputFrame$late <- outputFrame$late / sumFix * 100
+  # outputFrame$missing <- outputFrame$missing / sumFix * 100
+  # outputFrame$errenousDates <- outputFrame$errenousDates / sumFix * 100
+  # outputFrame$noFix <- outputFrame$noFix / sumFix * 100
+  # outputFrame$outBounds <- outputFrame$outBounds / sumFix * 100
   
   return(outputFrame)
 }
@@ -827,14 +767,14 @@ gpsSummaryCombine <- function(data1, data2)
   fix <- data1$fix + data2$fix
   early <- data1$early + data2$early
   late <- data1$late + data2$late
-  missing <- abs(data1$missing + data2$missing)
+  missing <- data1$missing + data2$missing
   errenousDates <- data1$errenousDates + data2$errenousDates
   noFix <- data1$noFix + data2$noFix
   outBounds <- data1$outBounds + data2$outBounds
   # 
   outputFrame <- data.frame(ID, expFix, fix, early, late, missing, errenousDates, noFix, outBounds)
   # 
-  sumFix <- (outputFrame$fix +  outputFrame$early + outputFrame$late + outputFrame$missing + outputFrame$errenousDates + outputFrame$noFix + outputFrame$outBounds)
+  sumFix <- (outputFrame$fix +  outputFrame$early + outputFrame$late + abs(outputFrame$missing) + outputFrame$errenousDates + outputFrame$noFix + outputFrame$outBounds)
   #
   outputFrame$fix <- outputFrame$fix / sumFix * 100
   outputFrame$early <- outputFrame$early / sumFix * 100
@@ -1047,8 +987,8 @@ OutBounds <- function(dataIn)
         {
           if("CN_SE" != penName)
           {
-          holdFrame <- over(copyCoords, copyShape)
-          outputFrame <- rbind(outputFrame, holdFrame)
+            holdFrame <- over(copyCoords, copyShape)
+            outputFrame <- rbind(outputFrame, holdFrame)
           }
         }
       }
@@ -1141,10 +1081,10 @@ loadGPSCoordsList <- function(dataIn, sharedCRS)
 loadGPSCoordsFrame <- function(dataIn, sharedCRS)
 {
   copyFrame <- dataIn
-    
+  
   copyFrame <- copyFrame[c('Longitude', "Latitude")]
   coordinates(copyFrame) <- cbind(copyFrame$Longitude, copyFrame$Latitude)
-    
+  
   proj4string(copyFrame) <- sharedCRS
   
   return(copyFrame)
